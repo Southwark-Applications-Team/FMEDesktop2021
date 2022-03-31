@@ -24,7 +24,9 @@ Process to run: C:\Apps\FMEDesktop2021.2.3\fme.exe "E:\FME workspaces\PROD_Unifo
 When: 06:45, daily (seven days)
 #>
 
-Param ([bool]$test=$true)
+Param (
+    [bool]$test=$true
+)
 
 #region prepare log
 $logfolder = "$psscriptroot\Logs" 
