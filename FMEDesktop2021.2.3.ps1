@@ -100,7 +100,7 @@ function Set-EmailAlert {
     
 }
 
-
+# run the FME program 
 function Publish-FMEWorkspace 
 { 
     Param ($workspace)
@@ -114,7 +114,9 @@ function Publish-FMEWorkspace
 
 }
 
+# run started or completed message
 function Set-RunMessage ($msg) { write-host ("{0} {1:dd/MM/yyyy HH:mm:ss}" -f $msg, (get-date))}
+
 #--------------
 # Main
 #--------------
