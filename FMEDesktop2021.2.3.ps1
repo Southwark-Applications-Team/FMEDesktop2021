@@ -64,8 +64,16 @@ function Set-EmailAlert {
 
     if ($lines) { $lines }  else { "not found" } 
     
-    $body = ''
-    $lines | ForEach-Object {$body = $body +  $_.Line  + '<br>'}
+    $body = 'Report from scheduled task FMEDesktop2021 on LBSVSLAPP022<br>See attached for full log<br><br>'
+    $lines | ForEach-Object {
+        if ($_.line -match '(error|failed)') {
+            $body +=  "<span style=""color: red"">{0}</span><br>" -f  $_.Line
+        } elseif ($_.line -match '(successful$)') {
+            $body +=  "<span style=""color: black"">{0}</span><br>" -f  $_.Line
+        } else {
+            $body +=  "{0}<br>" -f  $_.Line
+        }
+    }
     $subject = 'FME Desktop'
     if ($test) { $subject += ' TEST'}
     #$subject += " Success={0} Fail={1}" -f $SuccessLines.Count, $FailedLines.Count
@@ -106,11 +114,12 @@ function Publish-FMEWorkspace
 
 }
 
+function Set-RunMessage ($msg) { write-host ("{0} {1:dd/MM/yyyy HH:mm:ss}" -f $msg, (get-date))}
 #--------------
 # Main
 #--------------
 
-Write-Host ("Run Started {0:dd/MM/yyyy HH:mm}" -f (get-date))
+Set-RunMessage -msg "Run Started"
 
 if (-not $test) {
     Publish-FMEWorkspace "E:\FME workspaces\PROD_ConfirmGroupProcessing.fmw"
@@ -123,7 +132,7 @@ if (-not $test) {
 }
 
 Write-Host "$dash"
-Write-Host ("Run Completed {0:dd/MM/yyyy HH:mm}" -f (get-date))
+Set-RunMessage -msg "Run Completed"
 
 stop-transcript 
 

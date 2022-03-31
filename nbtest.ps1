@@ -24,13 +24,15 @@ Process to run: C:\Apps\FMEDesktop2021.2.3\fme.exe "E:\FME workspaces\PROD_Unifo
 When: 06:45, daily (seven days)
 #>
 
+Param ([bool]$test=$true)
+
 #region prepare log
 $logfolder = "$psscriptroot\Logs" 
 new-item $logfolder -ItemType Directory -ErrorAction SilentlyContinue
 $logfile = Join-Path $logfolder -ChildPath ("$([io.path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Definition))_{0:yyyyMMdd_HHmm}.txt" -f (get-date))
 
 # tidy log folder
-Get-ChildItem $logfolder -File *.txt | Where-Object LastWriteTime -lt  (Get-Date).AddDays(-2)  | Remove-Item -Force -WhatIf
+Get-ChildItem $logfolder -File *.txt | Where-Object LastWriteTime -lt  (Get-Date).AddDays(-21)  | Remove-Item -Force -WhatIf
 
 Start-Transcript -Path $logfile
 
@@ -38,10 +40,70 @@ Start-Transcript -Path $logfile
 
 $Command = "C:\Apps\FMEDesktop2021.2.3\fme.exe"
 
+$dash = '-'*50
+#--------------
+# Functions
+#--------------
+
+# email alert   
+function Set-EmailAlert {
+    param (
+        $logfile  
+    )
+    $alerts = @()
+    if ($test) {$alerts += 'Stuart.Carter@SOUTHWARK.GOV.UK' }
+    $alerts += 'neil.brereton@southwark.gov.uk'
+
+    $lines = Select-String -Path $logfile  -Pattern '(Translation|^-|fme\.exe|run start|run completed|process completed|error)'
+    $SuccessLines = Select-String -Path $logfile  -Pattern '(SUCCESSFUL with)'
+    $FailedLines = Select-String -Path $logfile  -Pattern '(FAILED with)'
+
+    Write-Host ("Success {0}" -f $SuccessLines.Count) -ForegroundColor Green  
+    Write-Host ("Failed {0}" -f $FailedLines.Count) -ForegroundColor red  
+
+
+    if ($lines) { $lines }  else { "not found" } 
+    
+    $body = 'Report from scheduled task FMEDesktop2021 on LBSVSLAPP022<br>See attached for full log<br><br>'
+    $lines | ForEach-Object {
+        if ($_.line -match '(error|failed)') {
+            $body +=  "<span style=""color: red"">{0}</span><br>" -f  $_.Line
+        } else {
+            $body +=  "{0}<br>" -f  $_.Line
+        }
+    }
+    $subject = 'FME Desktop'
+    if ($test) { $subject += ' TEST'}
+    #$subject += " Success={0} Fail={1}" -f $SuccessLines.Count, $FailedLines.Count
+    if ($SuccessLines.Count -gt 0) {$subject += " Success={0}" -f $SuccessLines.Count}
+    if ($FailedLines.Count -gt 0) {$subject += " Fail={0}" -f $FailedLines.Count}
+    
+    $MyParameters = @{
+        to = $alerts
+        #Cc = @()
+        #Bcc = 'nbrereton1@gmail.com'     
+        subject = $subject
+        bodyashtml = $true
+        body = "$body<br><br>"
+        from = 'FMEpublish@lbsvslapp022'
+        SmtpServer = 'smtp.southwark.gov.uk'
+        Attachments = $LogFile
+    } 
+    
+    
+    
+    #send-mailmessage -to $alerts -subject $subject -bodyashtml -body $body -from  $from -SmtpServer “mail.lbs.ad.southwark.gov.uk"  
+    
+    send-mailmessage @MyParameters 
+    
+}
+
+
 function Publish-FMEWorkspace 
 { 
     Param ($workspace)
-    Write-Host "`r`n----------------------------------`r`n$Command" $workspace
+    Write-Host "$dash"
+    Write-Host $Command $workspace
    
     & "$Command" $workspace
 
@@ -50,6 +112,28 @@ function Publish-FMEWorkspace
 
 }
 
+#--------------
+# Main
+#--------------
+
+Write-Host ("Run Started {0:dd/MM/yyyy HH:mm}" -f (get-date))
+
+if (-not $test) {
+    Publish-FMEWorkspace "E:\FME workspaces\PROD_ConfirmGroupProcessing.fmw"
+
+    Publish-FMEWorkspace "E:\FME workspaces\PROD_LLPG_SSA_AddressSearchUpdate.fmw"
+
+    Publish-FMEWorkspace "E:\FME workspaces\PROD_Exacom.fmw"
+
+    Publish-FMEWorkspace "E:\FME workspaces\PROD_UniformGroupProcessing.fmw" 
+}
+
+Write-Host "$dash"
+Write-Host ("Run Completed {0:dd/MM/yyyy HH:mm}" -f (get-date))
 
 stop-transcript 
+
+if ($test) {  Set-EmailAlert -logfile 'E:\Scripts\FMEDesktop2021\Logs\example.log' } 
+else { Set-EmailAlert -logfile $logfile }   
+
 
