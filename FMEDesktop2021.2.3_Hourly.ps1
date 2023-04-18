@@ -1,27 +1,13 @@
 ﻿<#
-2a
-Server: lbsvslapp022
-Application: FME Desktop 2019.2
-Process to run: C:\Apps\FMEDesktop2021.2.3\fme.exe "E:\FME workspaces\PROD_ConfirmGroupProcessing.fmw"
-When: 06:00, daily (seven days) 
 
-2b
 Server: lbsvslapp022
-Application: FME
-Process to run: C:\Apps\FMEDesktop2021.2.3\fme.exe "E:\FME workspaces\PROD_LLPG_SSA_AddressSearchUpdate.fmw"
-When: 06:15, daily (seven days)
+Application: FME Desktop 2021.2
+Process to run: C:\Apps\FMEDesktop2021.2.3\fme.exe "E:\FME workspaces\PROD_BroadbandViaFTP.fmw"
+When: 15 minutes past each hour (for 24 hours)
+Days: Monday to Sunday
 
-2c
-Server: lbsvslapp022
-Application: FME
-Process to run: C:\Apps\FMEDesktop2021.2.3\fme.exe "E:\FME workspaces\PROD_Exacom.fmw"
-When: 06:30, daily (seven days) 
+to do :   use same script has original run every day
 
-2d
-Server: lbsvslapp022
-Application: FME
-Process to run: C:\Apps\FMEDesktop2021.2.3\fme.exe "E:\FME workspaces\PROD_UniformGroupProcessing.fmw" 
-When: 06:45, daily (seven days)
 #>
 
 Param (
@@ -29,12 +15,13 @@ Param (
 )
 
 #region prepare log
-$logfolder = "$psscriptroot\Logs" 
+$basename = [io.path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Definition)
+$logfolder = "$psscriptroot\Logs\$basename" 
 new-item $logfolder -ItemType Directory -ErrorAction SilentlyContinue
-$logfile = Join-Path $logfolder -ChildPath ("$([io.path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Definition))_{0:yyyyMMdd_HHmm}.txt" -f (get-date))
+$logfile = Join-Path $logfolder -ChildPath ("$($basename)_{0:yyyyMMdd_HHmm}.txt" -f (get-date))
 
 # tidy log folder
-Get-ChildItem $logfolder -File *.txt | Where-Object LastWriteTime -lt  (Get-Date).AddDays(-21)  | Remove-Item -Force -WhatIf
+Get-ChildItem $logfolder -File *.txt | Where-Object LastWriteTime -lt  (Get-Date).AddDays(-2)  | Remove-Item -Force -WhatIf
 
 Start-Transcript -Path $logfile
 
@@ -43,6 +30,7 @@ Start-Transcript -Path $logfile
 $Command = "C:\Apps\FMEDesktop2021.2.3\fme.exe"
 
 $dash = '-'*50
+
 #--------------
 # Functions
 #--------------
@@ -59,14 +47,14 @@ function Set-EmailAlert {
     $lines = Select-String -Path $logfile  -Pattern '(Translation|^-|fme\.exe|run start|run completed|process completed|error)'
     $SuccessLines = Select-String -Path $logfile  -Pattern '(SUCCESSFUL with)'
     $FailedLines = Select-String -Path $logfile  -Pattern '(FAILED with)'
-
+ 
     Write-Host ("Success {0}" -f $SuccessLines.Count) -ForegroundColor Green  
     Write-Host ("Failed {0}" -f $FailedLines.Count) -ForegroundColor red  
 
 
     if ($lines) { $lines }  else { "not found" } 
     
-    $body = 'Report from scheduled task FMEDesktop2021 on LBSVSLAPP022<br>See attached for full log<br><br>'
+    $body = "Report from scheduled task $basename on LBSVSLAPP022<br>See attached for full log<br><br>"
     $lines | ForEach-Object {
         if ($_.line -match '(error|failed)') {
             $body +=  "<span style=""color: red"">{0}</span><br>" -f  $_.Line
@@ -76,7 +64,7 @@ function Set-EmailAlert {
             $body +=  "{0}<br>" -f  $_.Line
         }
     }
-    $subject = 'FME Desktop (Daily)'
+    $subject = 'FME Desktop (Hourly)'
     if ($test) { $subject += ' TEST'}
     #$subject += " Success={0} Fail={1}" -f $SuccessLines.Count, $FailedLines.Count
     if ($SuccessLines.Count -gt 0) {$subject += " Success={0}" -f $SuccessLines.Count}
@@ -94,8 +82,8 @@ function Set-EmailAlert {
         Attachments = $LogFile
     } 
     
-    
-    
+    if ($FailedLines.Count -eq 0 -and -$SuccessLines.Count -gt 0) { $MyParameters.to = 'neil.brereton@southwark.gov.uk'  }
+        
     #send-mailmessage -to $alerts -subject $subject -bodyashtml -body $body -from  $from -SmtpServer “mail.lbs.ad.southwark.gov.uk"  
     
     send-mailmessage @MyParameters 
@@ -110,7 +98,7 @@ function Publish-FMEWorkspace
     Write-Host $Command $workspace
    
     & "$Command" $workspace
-3
+
     write-host ("Process completed at {0}" -f (get-date))
     Start-Sleep -Seconds 5
 
@@ -125,16 +113,18 @@ function Set-RunMessage ($msg) { write-host ("{0} {1:dd/MM/yyyy HH:mm:ss}" -f $m
 
 Set-RunMessage -msg "Run Started"
 
+Write-Host "Test = $test"
+
 if (-not $test) {
-    Publish-FMEWorkspace "E:\FME workspaces\PROD_ConfirmGroupProcessing.fmw"
+    #Publish-FMEWorkspace "E:\FME workspaces\PROD_ConfirmGroupProcessing.fmw"
 
-    Publish-FMEWorkspace "E:\FME workspaces\PROD_LLPG_SSA_AddressSearchUpdate.fmw"
+    #Publish-FMEWorkspace "E:\FME workspaces\PROD_LLPG_SSA_AddressSearchUpdate.fmw"
 
-    Publish-FMEWorkspace "E:\FME workspaces\PROD_Exacom.fmw"
+    #Publish-FMEWorkspace "E:\FME workspaces\PROD_Exacom.fmw"
 
-    Publish-FMEWorkspace "E:\FME workspaces\PROD_UniformGroupProcessing.fmw" 
+    #Publish-FMEWorkspace "E:\FME workspaces\PROD_UniformGroupProcessing.fmw" 
 
-    Publish-FMEWorkspace "E:\FME workspaces\PROD_LLPGProcessing.fmw"
+    Publish-FMEWorkspace "E:\FME workspaces\PROD_BroadbandViaFTP.fmw"
 }
 
 Write-Host "$dash"
